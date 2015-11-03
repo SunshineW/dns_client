@@ -1,0 +1,1 @@
+a simple dns client send a quary message and explain response
