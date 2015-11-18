@@ -12,20 +12,31 @@
 
 #include "dns_health_check.h"
 
-#define BUFFER_MAX_SIZE 2048
-#define DOMAIN_MAX_SIZE 256
-#define DNS_RR_MAX_SIZE 256
+#define A 		1
+#define NS		2
+#define AAAA 	28
+#define CNAME	5
+#define MX		15
+#define SOA		6
+#define TXT		16
 
-#define DNS_CHECK_SUCCESS 0
+#define BUFFER_MAX_SIZE 2048 	/* dns查询包和响应包的最大大小 */
+#define DOMAIN_MAX_SIZE 256		/* 域名的最大长度 */
+#define DNS_RR_MAX_SIZE 256		/* 一条资源记录的最大长度 */
+#define TIMEOUT 5				/* 等待响应的最大时间 */
+
+#define DNS_CHECK_SUCCESS 0  
+
 #define DNS_SERVER_HEALTH 1
 #define DNS_SERVER_NOT_HEALTH 2
-
+#define PARAMETER_NO_ERROR 0
 #define PARAMETER_ERROR -1
 #define GET_DNS_SERVER_IP_ERROR -2
 #define QUARY_SEND_ERROR -3
 #define RESPONSE_RECV_ERROR -5
 #define TCP_CONNECT_ERROR -4
 #define SOCKET_ERROR -6
+
 
 
 /* 读取配置文件中的dns服务器地址 成功则把
@@ -121,19 +132,31 @@ int get_domain(int no, char* domain_buf, unsigned char* dns_buf)
     return no;
 }
 
+int domain_check(char *domain)
+{
+	if (domain == NULL)
+	{
+		return PARAMETER_ERROR;
+	}
+	else 
+	{
+		return PARAMETER_NO_ERROR;
+	}
+}
+
 int proto_check(char *proto)
 {
 	if (proto == NULL)
 	{
-		return -1;
+		return PARAMETER_ERROR;
 	}
 	if(strncmp(proto, "UDP", 3) != 0 && strncmp(proto, "TCP", 3) != 0)
 	{
-		return -1;
+		return PARAMETER_ERROR;
 	}
 	else
 	{
-		return 0;
+		return PARAMETER_NO_ERROR;
 	}
 
 }
@@ -141,57 +164,57 @@ int proto_check(char *proto)
 int type_check(char *type)
 {
 	if (type == NULL)
-		return -1;
+		return PARAMETER_ERROR;
 	
 	else if (strcmp(type, "A") == 0) 
-		return 1;
+		return A;
 	
 	else if (strncmp(type, "CNAME", 5) == 0) 
-		return 5;
+		return CNAME;
 	
 	else if (strncmp(type, "NS", 2) == 0) 
-		return 2;
+		return NS;
 	
 	else if (strncmp(type, "AAAA", 4) == 0) 
-		return 28;
+		return AAAA;
 	
 	else if (strncmp(type, "MX", 2) == 0) 
-		return 15;
+		return MX;
 	
 	else if (strncmp(type, "SOA", 3) == 0) 
-		return 6;
+		return SOA;
 	
 	else if (strncmp(type, "TXT", 3) == 0) 
-		return 16;
+		return TXT;
 	
 	else
-		return -1;
+		return PARAMETER_ERROR;
 }
 
 int port_check(char *port)
 {
 	if (port == NULL)
 	{
-		return -1;
+		return PARAMETER_ERROR;
 	}
 	int num = atoi(port);
 	if (num <=0 )
 	{
-		return -1;
+		return PARAMETER_ERROR;
 	}
 	return num;
 }
 
-int parameter_check(char *domain, char *type, char *proto, char *port)
+int parameter_check(char *domain, char *type, char *proto, char *port, char *server_ip)
 {
-	if (domain == NULL || type_check(type) == -1 ||\
-		proto_check(proto)== -1 || port_check(port) == -1)
+	if (domain == NULL || type_check(type) == PARAMETER_ERROR || server_ip == NULL \
+		|| proto_check(proto) == PARAMETER_ERROR || port_check(port) == PARAMETER_ERROR)
 	{
-		return -1;
+		return PARAMETER_ERROR;
 	}
 	else 
 	{
-		return 0;
+		return PARAMETER_NO_ERROR;
 	}
 }
 
@@ -224,7 +247,7 @@ int domain_transform(char *dest, char *domain)
 	return 0;
 }
 
-/* 创建一个dns查选包，返回包的长度 */
+/* 创建一个dns查询包，返回包的长度 */
 int gen_dns_packet(char *buffer, char *domain_name, char *type, char *proto)
 {
 	dns_header_t header;
@@ -268,24 +291,19 @@ int gen_dns_packet(char *buffer, char *domain_name, char *type, char *proto)
 }
 
 /* 取得服务器的响应包，返回的是错误代码 */
-int get_dns_response(char *sendbuf, unsigned char * recv_buf, int sendbuf_len, char *proto, char *port)
+int get_dns_response(char *sendbuf, unsigned char * recv_buf, int sendbuf_len, char *proto, char *port, char *server_ip)
 {
 	int sockfd;
 	int ret;
 	struct sockaddr_in addr;
 	struct timeval tv;
-	char server_ip[128];
 	
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(atoi(port));
-	if (read_dns_server_ip(server_ip, "/etc/resolv.conf") == -1)
-	{
-		return GET_DNS_SERVER_IP_ERROR;
-	}
 	addr.sin_addr.s_addr = inet_addr(server_ip);
 	tv.tv_usec = 0;
-	tv.tv_sec = 5;
+	tv.tv_sec = TIMEOUT;
 	
 	if(strncmp(proto, "TCP", 3) == 0)
 	{
@@ -351,26 +369,26 @@ int print_dns_rr(unsigned char *data, int type, unsigned char *recv_buf, int off
 {
 	switch (type)
 	{
-		case 1:
+		case A:
 		{
 			printf("%-10s%i.%i.%i.%i\n", "A", data[0], data[1], data[2], data[3]);
 			break;	
 		}				
-		case 5:
+		case CNAME:
 		{
 			char cname[DOMAIN_MAX_SIZE]={0};
 			get_domain(offset, cname, recv_buf);
 			printf("%-10s%-s\n", "CNAME", cname);
 			break;	
 		}		
-		case 2:
+		case NS:
 		{
 			char ns_name[DOMAIN_MAX_SIZE];
 			get_domain(offset, ns_name, recv_buf);
 			printf("%-10s%-s\n", "NS", ns_name);
 			break;
 		}
-		case 6:
+		case SOA:
 		{
 			char mname[100] = {0};
 			char rname[100] = {0};
@@ -392,7 +410,7 @@ int print_dns_rr(unsigned char *data, int type, unsigned char *recv_buf, int off
 			break;
 		}
 			
-		case 15:
+		case MX:
 		{
 			int preference = *(unsigned short*) data;
 			char exchange[100];
@@ -400,10 +418,10 @@ int print_dns_rr(unsigned char *data, int type, unsigned char *recv_buf, int off
 			printf("MX\t%i\t%s\n", ntohs(preference), exchange);
 			break;
 		}
-		case 16:
+		case TXT:
 			printf("TXT\t%s\n", data + 1);
 			break;
-		case 28:
+		case AAAA:
 		{
 			printf("%-10s","AAAA");
 			int i=0;
@@ -453,7 +471,7 @@ int unpacket(unsigned char *recv_buf,char *proto, char *type)
 		printf(";%-32s%-10s%s\n", domain, "IN", type);
 	}
 	
-	if (ntohs(header.ancount) > 0)
+	if (rr_no > 0)
 	{
 		printf("\n;;ANSWER SECTION:\n");    
 	}
@@ -469,7 +487,7 @@ int unpacket(unsigned char *recv_buf,char *proto, char *type)
 		memcpy(data, recv_buf + offset, ntohs(rr.rdlength));
 		
 		int type = ntohs(rr.type);
-		if (type == 1 ||type == 2 ||type == 5 ||type == 28|| type == 6 || type == 15 || type == 16)
+		if (type == A ||type == AAAA ||type == CNAME ||type == NS|| type == SOA || type == MX || type == TXT)
 		{
 			if (type == htons(question.qtype))
 				result = DNS_SERVER_HEALTH;
@@ -492,12 +510,12 @@ int unpacket(unsigned char *recv_buf,char *proto, char *type)
 	return result;
 }
 
-int dns_health_check(char *domain, char *type, char *proto, char *port)
+int dns_health_check(char *server_ip, char *domain, char *type, char *proto, char *port)
 {
 	
 	int offset;
 	int result;
-	result = parameter_check(domain, type, proto, port);
+	result = parameter_check(domain, type, proto, port, server_ip);
 	if (result == -1)
 	{
 		return PARAMETER_ERROR;
@@ -509,7 +527,7 @@ int dns_health_check(char *domain, char *type, char *proto, char *port)
 	memset(recv_buf,0, sizeof(recv_buf));
 	
 	offset = gen_dns_packet(sendbuf, domain, type, proto);
-	result = get_dns_response(sendbuf, recv_buf, offset, proto, port);
+	result = get_dns_response(sendbuf, recv_buf, offset, proto, port, server_ip);
 	if (result != DNS_CHECK_SUCCESS)
 	{
 		return result;

@@ -16,7 +16,7 @@
 int main(int argc, char **argv)
 {
 	int result;
-	result = dns_health_check("www.baidu.com", "A", "UDP", "53");
+	result = dns_health_check("8.8.8.8", "www.baidu.com", "A", "UDP", "53");
 	switch(result)
 	{
 		case DNS_SERVER_HEALTH:
@@ -25,8 +25,6 @@ int main(int argc, char **argv)
 			printf("DNS_SERVER_NOT_HEALTH\n");break;  
 		case PARAMETER_ERROR :                 
 			printf("PARAMETER_ERROR\n");break;
-		case GET_DNS_SERVER_IP_ERROR :          
-			printf("GET_DNS_SERVER_IP_ERROR\n");break;
 		case QUARY_SEND_ERROR :                
 			printf("QUARY_SEND_ERROR\n");break;
 		case RESPONSE_RECV_ERROR :              

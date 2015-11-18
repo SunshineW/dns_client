@@ -38,7 +38,6 @@ typedef struct
    把ip地址放入server_addr 返回0。 失败返回-1 */
 int read_dns_server_ip(char *server_addr, char *config_file);
 
-
 /* 解析dnsbuf中no位后的一个域名信息放到domain_buf中
    domain_buf在函数外分配内存 */
 int get_domain(int no, char* domain_buf, unsigned char* dns_buf);
@@ -48,8 +47,7 @@ int get_domain(int no, char* domain_buf, unsigned char* dns_buf);
 int proto_check(char *proto);
 int type_check(char *type);
 int port_check(char *port);
-int parameter_check(char *domain, char *type, char *proto, char *port);
-
+int parameter_check(char *domain, char *type, char *proto, char *port, char *server_ip);
 
 /* dest在外面分配好大小，大小为strlen(domain) + 2
  * 把域名转换为数据包中的格式 www.abc.cn --> 3www3abc2cn0 */
@@ -59,7 +57,7 @@ int domain_transform(char *dest, char *domain);
 int gen_dns_packet(char *buffer, char *domain_name, char *type, char *proto);
 
 /* 取得服务器的响应包，返回的是错误代码 */
-int get_dns_response(char *sendbuf, unsigned char * recv_buf, int sendbuf_len, char *proto, char *port);
+int get_dns_response(char *sendbuf, unsigned char * recv_buf, int sendbuf_len, char *proto, char *port, char *server_ip);
 
 /* 打印一条资源记录信息 */
 int print_dns_rr(unsigned char *data, int type, unsigned char *recv_buf, int offset);
@@ -67,6 +65,6 @@ int print_dns_rr(unsigned char *data, int type, unsigned char *recv_buf, int off
 /* 打印dns响应包，返回服务器健康情况，*/
 int unpacket(unsigned char *recv_buf,char *proto, char *type);
 
-int dns_health_check(char *domain, char *type, char *proto, char *port);
+int dns_health_check(char *server_ip, char *domain, char *type, char *proto, char *port);
 
 #endif
